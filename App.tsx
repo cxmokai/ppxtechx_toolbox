@@ -198,7 +198,9 @@ const App: React.FC = () => {
           <section>
             <div className="flex items-center gap-2 mb-4">
               <h2 className="text-lg font-semibold text-stone-800">常用工具</h2>
-              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">Top 4</span>
+              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">
+                Top 12
+              </span>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {topTools.map(tool => (
