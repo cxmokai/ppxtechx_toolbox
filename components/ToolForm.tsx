@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { WebTool, ToolFormData } from '../types';
 import { Button, Input, Label, Badge, Dialog } from './UI';
-import { X, Plus } from 'lucide-react';
+import { X, Plus, Tag } from 'lucide-react';
 
 interface ToolFormProps {
   isOpen: boolean;
@@ -19,6 +19,10 @@ const ToolForm: React.FC<ToolFormProps> = ({ isOpen, onClose, onSubmit, initialD
     note: ''
   });
   const [tagInput, setTagInput] = useState('');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (initialData) {
@@ -37,7 +41,21 @@ const ToolForm: React.FC<ToolFormProps> = ({ isOpen, onClose, onSubmit, initialD
       });
     }
     setTagInput('');
+    setIsDropdownOpen(false);
   }, [initialData, isOpen]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,33 +69,39 @@ const ToolForm: React.FC<ToolFormProps> = ({ isOpen, onClose, onSubmit, initialD
       setFormData(prev => ({ ...prev, tags: [...prev.tags, trimmed] }));
     }
     setTagInput('');
+    setIsDropdownOpen(false);
+    inputRef.current?.focus();
   };
 
   const removeTag = (tagToRemove: string) => {
     setFormData(prev => ({ ...prev, tags: prev.tags.filter(t => t !== tagToRemove) }));
   };
 
-  const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' || e.key === ',') {
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
       e.preventDefault();
-      addTag(tagInput);
+      if (tagInput.trim()) {
+        addTag(tagInput);
+      }
     }
   };
 
-  const suggestedTags = allExistingTags.filter(t => 
-    !formData.tags.includes(t) && t.toLowerCase().includes(tagInput.toLowerCase())
-  ).slice(0, 8); // Limit suggestions
+  // Filter available tags: match input, exclude already selected
+  const filteredTags = allExistingTags.filter(t => 
+    !formData.tags.includes(t) && 
+    t.toLowerCase().includes(tagInput.toLowerCase())
+  );
 
   return (
     <Dialog open={isOpen} onClose={onClose} title={initialData ? "编辑工具" : "添加新工具"}>
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-5">
         <div className="space-y-2">
           <Label>标题</Label>
           <Input 
             required
             value={formData.title} 
             onChange={e => setFormData({...formData, title: e.target.value})} 
-            placeholder="例如: Google Gemnini"
+            placeholder="例如: Google Gemini"
           />
         </div>
         
@@ -94,56 +118,98 @@ const ToolForm: React.FC<ToolFormProps> = ({ isOpen, onClose, onSubmit, initialD
 
         <div className="space-y-2">
           <Label>标签</Label>
-          <div className="flex flex-wrap gap-2 mb-2">
+          
+          {/* Selected Tags Area */}
+          <div className="flex flex-wrap gap-2 mb-2 min-h-[32px] p-2 rounded-md border border-stone-100 bg-stone-50/50">
+            {formData.tags.length === 0 && (
+              <span className="text-xs text-muted-foreground self-center">暂无标签</span>
+            )}
             {formData.tags.map(tag => (
-              <Badge key={tag} variant="secondary" className="pr-1 gap-1">
+              <Badge key={tag} variant="secondary" className="pr-1 gap-1 bg-white border-stone-200 hover:bg-white shadow-sm">
                 {tag}
-                <X size={12} className="cursor-pointer hover:text-red-500" onClick={() => removeTag(tag)} />
+                <X size={12} className="cursor-pointer text-stone-400 hover:text-red-500 transition-colors" onClick={() => removeTag(tag)} />
               </Badge>
             ))}
           </div>
-          <div className="flex gap-2">
-            <Input 
-              value={tagInput}
-              onChange={e => setTagInput(e.target.value)}
-              onKeyDown={handleTagKeyDown}
-              placeholder="输入标签并回车..."
-            />
-            <Button type="button" size="sm" variant="secondary" onClick={() => addTag(tagInput)} disabled={!tagInput.trim()}>
-              <Plus size={16} />
-            </Button>
-          </div>
-          
-          {/* Quick select existing tags */}
-          {allExistingTags.length > 0 && (
-            <div className="pt-2">
-              <span className="text-xs text-muted-foreground mr-2">推荐标签:</span>
-              <div className="flex flex-wrap gap-1.5 mt-1">
-                {suggestedTags.map(tag => (
-                  <Badge 
-                    key={tag} 
-                    variant="outline" 
-                    className="cursor-pointer hover:bg-rose-50 hover:text-rose-600 transition-colors"
-                    onClick={() => addTag(tag)}
-                  >
-                    {tag}
-                  </Badge>
-                ))}
-                {suggestedTags.length === 0 && allExistingTags.length > 0 && tagInput === '' && (
-                   allExistingTags.filter(t => !formData.tags.includes(t)).slice(0,5).map(tag => (
-                    <Badge 
-                    key={tag} 
-                    variant="outline" 
-                    className="cursor-pointer hover:bg-rose-50 hover:text-rose-600 transition-colors"
-                    onClick={() => addTag(tag)}
-                  >
-                    {tag}
-                  </Badge>
-                   ))
+
+          {/* Tag Selection / Input */}
+          <div className="relative" ref={wrapperRef}>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Tag className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input 
+                  ref={inputRef}
+                  value={tagInput}
+                  onChange={e => {
+                    setTagInput(e.target.value);
+                    setIsDropdownOpen(true);
+                  }}
+                  onFocus={() => setIsDropdownOpen(true)}
+                  onKeyDown={handleInputKeyDown}
+                  placeholder="选择标签或输入新标签..."
+                  className="pl-9"
+                />
+              </div>
+              <Button 
+                type="button" 
+                size="icon" 
+                variant="secondary" 
+                onClick={() => addTag(tagInput)} 
+                disabled={!tagInput.trim()}
+                title="添加标签"
+              >
+                <Plus size={16} />
+              </Button>
+            </div>
+
+            {/* Dropdown Menu */}
+            {isDropdownOpen && (
+              <div className="absolute z-50 w-full mt-1 bg-white border border-stone-200 rounded-lg shadow-lg max-h-60 overflow-y-auto overflow-x-hidden animate-in fade-in zoom-in-95 duration-100 ring-1 ring-black/5">
+                
+                {/* Existing Tags List */}
+                {filteredTags.length > 0 && (
+                  <div className="p-1">
+                    <div className="text-xs font-semibold text-muted-foreground px-2 py-1.5">
+                      现有标签
+                    </div>
+                    {filteredTags.map(tag => (
+                      <div 
+                        key={tag}
+                        className="px-2 py-1.5 text-sm rounded-md cursor-pointer hover:bg-rose-50 hover:text-rose-700 transition-colors flex items-center justify-between group"
+                        onClick={() => addTag(tag)}
+                      >
+                        <span>{tag}</span>
+                        <Plus size={14} className="opacity-0 group-hover:opacity-100 text-rose-500" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Create New Tag Option */}
+                {tagInput.trim() && !formData.tags.includes(tagInput.trim()) && !filteredTags.some(t => t.toLowerCase() === tagInput.trim().toLowerCase()) && (
+                  <div className="p-1 border-t border-stone-100">
+                     <div className="text-xs font-semibold text-muted-foreground px-2 py-1.5">
+                      创建
+                    </div>
+                    <div 
+                      className="px-2 py-1.5 text-sm rounded-md cursor-pointer hover:bg-rose-50 text-rose-700 font-medium flex items-center"
+                      onClick={() => addTag(tagInput)}
+                    >
+                       <Plus size={14} className="mr-2" /> 
+                       创建 "{tagInput}"
+                    </div>
+                  </div>
+                )}
+
+                {/* No Matches / Empty */}
+                {!tagInput.trim() && filteredTags.length === 0 && (
+                  <div className="p-4 text-center text-sm text-stone-400">
+                     输入以创建新标签
+                  </div>
                 )}
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         <div className="space-y-2">
