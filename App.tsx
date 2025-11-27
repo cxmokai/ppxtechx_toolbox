@@ -33,7 +33,7 @@ const App: React.FC = () => {
 
   // Derived state: Top Tools (Most visited)
   const topTools = useMemo(() => {
-    return [...tools].sort((a, b) => b.visits - a.visits).slice(0, 4);
+    return [...tools].sort((a, b) => b.visits - a.visits).slice(0, 12);
   }, [tools]);
 
   // Derived state: Grouped by Category + Search filter
